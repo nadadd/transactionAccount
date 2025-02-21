@@ -1,12 +1,10 @@
-import React, {useState} from "react";
-import { View, Text, TextInput, FlatList, Button, Picker, TouchableOpacity, StyleSheet, ScrollView} from "react-native";
+import React, {useState, useEffect} from "react";
+import { View, Text, TextInput, FlatList, Image, Button, Picker, TouchableOpacity, StyleSheet, ScrollView} from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { collection, addDoc } from "firebase/firestore";
+import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
-
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-
 
 const Apports = () => {
   const router = useRouter();
@@ -14,22 +12,44 @@ const Apports = () => {
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString());
   const [description, setDescription] = useState("");
-
   const [imageAssets, setImageAssets] = useState([]);
   const [fileAssets, setFileAssets] = useState([]);
   const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
   const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
   const [newAccount, setNewAccount] = useState("");
   const [addingNewAccount, setAddingNewAccount] = useState(false);
+   // Finance states
+   const [bilan, setBilan] = useState("0");
+   const [caisse, setCaisse] = useState("0");
+   const [currentBalance, setCurrentBalance] = useState(0);
 
+   // Fetch balance and transactions on mount
+  useEffect(() => {
+    const fetchBalance = async () => {
+      const transactionsCollection = collection(db, "transactions");
+      const q = query(transactionsCollection, where("company", "==", company));
+      const querySnapshot = await getDocs(q);
 
+      let balance = 0;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.type === "apport") {
+          balance += data.amount;
+        } else if (data.type === "depense") {
+          balance -= data.amount;
+        }
+      });
+      setCurrentBalance(balance);
+    };
+
+    fetchBalance();
+  }, [company]);
 
   const handleSave = async () => {
     if (!amount && !selectedAccount) {
       alert("Please fill all fields");
       return;
     }
-
     try {
       const transactionsCollection = collection(db, "transactions");
       await addDoc(transactionsCollection, {
@@ -46,71 +66,61 @@ const Apports = () => {
       setDescription("");
       setSelectedAccount("BIAT");
       setNewAccount("");
-
+      setBilan("0");
+      setCaisse("0");
       router.push(`/TransactionScreen?company=${company}`);
     } catch (error) {
       console.error("Error saving transaction:", error);
       alert("Failed to save transaction");
     }
   };
-
-
   const handleAccountChange = (value) => {
     if (value === "+ Add New Account") {
-      setAddingNewAccount(true);  // Show input field
+      setAddingNewAccount(true); 
     } else {
       setAddingNewAccount(false);
       setSelectedAccount(value);
     }
   };
-  
   const addNewAccount = () => {
     if (newAccount.trim() !== "") {
-      setAccounts([...accounts, newAccount]);  // Add new account
-      setSelectedAccount(newAccount);  // Select the new account
-      setNewAccount("");  // Clear input
-      setAddingNewAccount(false);  // Hide input field
+      setAccounts([...accounts, newAccount]);  
+      setSelectedAccount(newAccount);
+      setNewAccount(""); 
+      setAddingNewAccount(false); 
     }
   };
-
-
   const handleAddImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaType.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
-
     if (!result.canceled) {
       setImageAssets((prevAssets) => [...prevAssets, result.assets[0].uri]);
     }
   };
 
-const handleAddFile = async () => {
+  const handleAddFile = async () => {
     let result = await DocumentPicker.getDocumentAsync({
       type: '*/*',
       copyToCacheDirectory: false,
     });
-
     if (result.type === 'success') {
       setFileAssets((prevAssets) => [...prevAssets, result.uri]);
     }
   };
   const renderImageAssets = ({ item }) => (
-    <View style={styles.assetItem}>
-      <Text style={styles.assetText}>Image: {item}</Text>
-    </View>
+    <Image source={{ uri: item }} style={{ width: 150, height: 150, margin: 5 }} />
   );
-
   const renderFileAssets = ({ item }) => (
     <View style={styles.assetItem}>
-      <Text style={styles.assetText}>File: {item}</Text>
+      <Text style={styles.assetText}>File: {item}</Text>  
     </View>
   );
 
-
-
+ 
   return (
     <ScrollView contentContainerStyle={styles.container}>
        <TouchableOpacity style={styles.closeButton} onPress={() => router.push(`/TransactionScreen?company=${company}`)}>
@@ -128,11 +138,9 @@ const handleAddFile = async () => {
         keyboardType="numeric"
         placeholderTextColor="#999"
       />
-
       <View style={styles.dateContainer}>
         <Text style={styles.dateText}>{date}</Text>
       </View>
-
       <TextInput
         style={styles.descriptionInput}
         placeholder="Description"
@@ -140,7 +148,6 @@ const handleAddFile = async () => {
         onChangeText={setDescription}
         placeholderTextColor="#999"
       />
-
 <View>
   <Text>Account :</Text>
     <Picker style={styles.accountContainer}
@@ -166,6 +173,28 @@ const handleAddFile = async () => {
     )}
   </View>
 
+{/* Finance Section */}
+
+<View style={styles.financeContainer}>
+<Text style={styles.financetext}><strong>Finance</strong> </Text>
+  <Text>Débit</Text>
+        <View style={styles.financeRow}>
+         
+          <Picker style={styles.financePicker} selectedValue={bilan} onValueChange={setBilan}>
+            <Picker.Item label="Bilan" value="Bilan" />
+            <Picker.Item label="Option 2" value="Option 2" />
+          </Picker>
+
+
+          <Picker style={styles.financePicker} selectedValue={caisse} onValueChange={setCaisse}>
+            <Picker.Item label="Caisse" value="Caisse" />
+            <Picker.Item label="Option B" value="Option B" />
+          </Picker>
+        </View>
+
+        <Text style={styles.balance}>{currentBalance}</Text>
+      </View>
+
 
 {/* Add Image and File Buttons */}
 <View style={styles.assetButtonsContainer}>
@@ -176,16 +205,14 @@ const handleAddFile = async () => {
           <Text style={styles.assetButtonText}>📁 Add File</Text>
         </TouchableOpacity>
       </View>
-
       {/* Image Carousel */}
-      <FlatList
+      <Image
         data={imageAssets}
         renderItem={renderImageAssets}
         keyExtractor={(item, index) => `image-${index}`}
         horizontal
         style={styles.assetCarousel}
       />
-
       {/* File Carousel */}
       <FlatList
         data={fileAssets}
@@ -194,7 +221,6 @@ const handleAddFile = async () => {
         horizontal
         style={styles.assetCarousel}
       />
-
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
         <Text style={styles.saveButtonText}>Save</Text>
       </TouchableOpacity>
@@ -244,6 +270,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     color: "#333",
+  },
+
+  financetext :{
+    fontSize: 18,
+    marginBottom: 10,
   },
   amountInput: {
     height: 80,
@@ -306,6 +337,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  financeContainer: { marginTop: 40 },
+  financeRow: { flexDirection: "row", justifyContent: "space-between", padding: 10 },
+  financePicker: { flex: 1, marginRight: 10 },
+  balance: {padding: 15, marginLeft: 30, backgroundColor: '#ccc'},
 });
 
 export default Apports;

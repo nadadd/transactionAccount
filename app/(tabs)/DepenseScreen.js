@@ -1,10 +1,9 @@
-  import React, { useState } from 'react';
-  import { View, Text, TextInput, Button,  FlatList, Picker, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+  import React, { useState, useEffect } from 'react';
+  import { View, Text, TextInput, Button,  FlatList, Picker, Image, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
   import * as ImagePicker from 'expo-image-picker';
   import * as DocumentPicker from 'expo-document-picker';
-
   import { useRouter, useLocalSearchParams } from 'expo-router';
-  import { collection, addDoc } from 'firebase/firestore';
+  import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
   import { db } from '../../firebaseConfig';
 
   const DepenseScreen = () => {
@@ -15,15 +14,42 @@
     const [description, setDescription] = useState('');
     const [imageAssets, setImageAssets] = useState([]);
     const [fileAssets, setFileAssets] = useState([]);
+    const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
+    const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
+    const [newAccount, setNewAccount] = useState("");
+    const [addingNewAccount, setAddingNewAccount] = useState(false);
+const [allAssets, setAllAssets] = useState('');
 
-const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
-const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
-const [newAccount, setNewAccount] = useState("");
-const [addingNewAccount, setAddingNewAccount] = useState(false);
+   // Finance states
+   const [bilan, setBilan] = useState("0");
+   const [caisse, setCaisse] = useState("0");
+   const [currentBalance, setCurrentBalance] = useState(0);
+
+   // Fetch balance and transactions on mount
+  useEffect(() => {
+    const fetchBalance = async () => {
+      const transactionsCollection = collection(db, "transactions");
+      const q = query(transactionsCollection, where("company", "==", company));
+      const querySnapshot = await getDocs(q);
+
+      let balance = 0;
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.type === "apport") {
+          balance += data.amount;
+        } else if (data.type === "depense") {
+          balance -= data.amount;
+        }
+      });
+      setCurrentBalance(balance);
+    };
+
+    fetchBalance();
+  }, [company]);
 
 
     const categories = {
-      Pays: ['Tunisie', 'France', 'Autriche', 'Amérique'],
+      Pays: ['Tunisie', 'France', 'Amérique'],
       Salaire: ['Épargne', 'Frais'],
       Devise: ['Euro', 'Dollar', 'Dinar'],
     };
@@ -45,12 +71,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         alert('No more categories available');
       }
     };
-
-
-
-   
-
-
     
     const handleSave = async () => {
       console.log("Navigating with company:", company); 
@@ -62,7 +82,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         alert('Please fill all fields');
         return;
       }
-    
       try {
         const transactionsCollection = collection(db, 'transactions');
         await addDoc(transactionsCollection, {
@@ -77,7 +96,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
           company, 
           type: 'depense',
         });
-
         alert('Transaction saved successfully!');
 
         setAmount("");
@@ -91,69 +109,58 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         alert('Failed to save transaction');
       }
     };
-  
- 
     const handleAccountChange = (value) => {
       if (value === "+ Add New Account") {
-        setAddingNewAccount(true);  // Show input field
+        setAddingNewAccount(true);  
       } else {
         setAddingNewAccount(false);
         setSelectedAccount(value);
       }
     };
-    
     const addNewAccount = () => {
       if (newAccount.trim() !== "") {
-        setAccounts([...accounts, newAccount]);  // Add new account
-        setSelectedAccount(newAccount);  // Select the new account
-        setNewAccount("");  // Clear input
-        setAddingNewAccount(false);  // Hide input field
+        setAccounts([...accounts, newAccount]);  
+        setSelectedAccount(newAccount);  
+        setNewAccount("");  
+        setAddingNewAccount(false);  
       }
     };
     
-
-
-
-  const handleAddImage = async () => {
+    const handleAddImage = async () => {
       let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [4, 3],
         quality: 1,
       });
-  
       if (!result.canceled) {
         setImageAssets((prevAssets) => [...prevAssets, result.assets[0].uri]);
       }
     };
-  
-  const handleAddFile = async () => {
+   
+    const renderImageAssets = ({ item }) => (
+      <Image source={{ uri: item }} style={{ width: 150, height: 150, margin: 5 }} />
+    );
+    
+    const handleAddFile = async () => {
       let result = await DocumentPicker.getDocumentAsync({
         type: '*/*',
         copyToCacheDirectory: false,
       });
-  
       if (result.type === 'success') {
         setFileAssets((prevAssets) => [...prevAssets, result.uri]);
       }
     };
-    const renderImageAssets = ({ item }) => (
-      <View style={styles.assetItem}>
-        <Text style={styles.assetText}>Image: {item}</Text>
-      </View>
-    );
-  
+
     const renderFileAssets = ({ item }) => (
       <View style={styles.assetItem}>
         <Text style={styles.assetText}>File: {item}</Text>
       </View>
     );
-
+ 
 
     return (
       <ScrollView contentContainerStyle={styles.container}>
-
-      
       <TouchableOpacity style={styles.closeButton} onPress={() => router.push(`/TransactionScreen?company=${company}`)}>
         <Text style={styles.closeButtonText}>✕</Text>
       </TouchableOpacity>
@@ -161,7 +168,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         <View style={styles.header}>
           <Text style={styles.headerText}>Depenses</Text>
         </View>
-
         <TextInput
           style={styles.amountInput}
           placeholder="0.000"
@@ -170,19 +176,16 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
           keyboardType="numeric"
           placeholderTextColor="#999"
         />
-
         <View style={styles.dateContainer}>
           <Text style={styles.dateText}>{date}</Text>
         </View>
-
         {selectedCategories.map((item, index) => (
           <View key={index} style={styles.dropdownContainer}>
             <Text style={styles.label}>{item.category}:</Text>
             <Picker
               selectedValue={item.subcategory}
               style={styles.picker}
-              onValueChange={(value) => updateSubcategory(index, value)}
-            >
+              onValueChange={(value) => updateSubcategory(index, value)}>
               <Picker.Item />
               {categories[item.category].map((subcategory, idx) => (
                 <Picker.Item key={idx} label={subcategory} value={subcategory} />
@@ -190,13 +193,11 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
             </Picker>
           </View>
         ))}
-
         {Object.keys(categories).length > selectedCategories.length && (
           <TouchableOpacity style={styles.addButton} onPress={addCategory}>
             <Text style={styles.addButtonText}>+ Add Subcategory</Text>
           </TouchableOpacity>
         )}
-
         <TextInput
           style={styles.descriptionInput}
           placeholder="Description"
@@ -204,15 +205,11 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
           onChangeText={setDescription}
           placeholderTextColor="#999"
         />
-
-
-
-<View>
+     <View>
   <Text>Account :</Text>
     <Picker style={styles.accountContainer}
       selectedValue={selectedAccount}
-      onValueChange={handleAccountChange}
-    >
+      onValueChange={handleAccountChange}>
       {accounts.map((account, index) => (
         <Picker.Item key={index} label={account} value={account} />
       ))}
@@ -232,8 +229,27 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
     )}
   </View>
 
-        
-       
+{/* Finance Section */}
+
+<View style={styles.financeContainer}>
+<Text style={styles.financetext}><strong>Finance</strong> </Text>
+  <Text>Débit</Text>
+        <View style={styles.financeRow}>
+         
+          <Picker style={styles.financePicker} selectedValue={bilan} onValueChange={setBilan}>
+            <Picker.Item label="Bilan" value="Bilan" />
+            <Picker.Item label="Option 2" value="Option 2" />
+          </Picker>
+
+
+          <Picker style={styles.financePicker} selectedValue={caisse} onValueChange={setCaisse}>
+            <Picker.Item label="Caisse" value="Caisse" />
+            <Picker.Item label="Option B" value="Option B" />
+          </Picker>
+        </View>
+
+        <Text style={styles.balance}>{currentBalance}</Text>
+      </View>
 
  {/* Add Image and File Buttons */}
  <View style={styles.assetButtonsContainer}>
@@ -253,7 +269,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         horizontal
         style={styles.assetCarousel}
       />
-
       {/* File Carousel */}
       <FlatList
         data={fileAssets}
@@ -262,7 +277,6 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
         horizontal
         style={styles.assetCarousel}
       />
-
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
@@ -400,6 +414,10 @@ const [addingNewAccount, setAddingNewAccount] = useState(false);
       fontSize: 18,
       fontWeight: 'bold',
     },
+    financeContainer: { marginTop: 40 },
+  financeRow: { flexDirection: "row", justifyContent: "space-between", padding: 10 },
+  financePicker: { flex: 1, marginRight: 10 },
+  balance: {padding: 15, marginLeft: 30, backgroundColor: '#ccc'},
   });
 
   export default DepenseScreen;
