@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Button, Alert, StyleSheet, ActivityIndicator } from "react-native";
+import { View,Text, TextInput,Button,Alert,StyleSheet,ActivityIndicator} from "react-native";
 import { useRouter } from "expo-router";
 import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
 
@@ -7,21 +7,19 @@ const AuthScreen = () => {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [emailValidError, setEmailValidError] = useState('');
+  const [emailValidError, setEmailValidError] = useState("");
 
-  const handleValidEmail = val => {
+  const handleValidEmail = (val) => {
     let reg = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w\w+)+$/;
-    
-    if (val.length === 0) {
-      setEmailValidError('email address must be enter');
-    } else if (reg.test(val) === false) {
-      setEmailValidError('enter valid email address');
-    } else if (reg.test(val) === true) {
-      setEmailValidError('');
-    }
-    };
 
-  const db = getFirestore(); 
+    if (reg.test(val) === false) {
+      setEmailValidError("enter valid email address");
+    } else if (reg.test(val) === true) {
+      setEmailValidError("");
+    }
+  };
+
+  const db = getFirestore();
 
   const sendPinToEmail = async () => {
     if (!email) {
@@ -32,12 +30,12 @@ const AuthScreen = () => {
     setLoading(true);
 
     try {
-     const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
       await setDoc(doc(db, "pins", email), {
         pin: generatedPin,
         timestamp: serverTimestamp(),
       });
-  console.log(`PIN sent to ${email}: ${generatedPin}`);
+      console.log(`PIN sent to ${email}: ${generatedPin}`);
 
       router.push({
         pathname: "/PinScreen",
@@ -55,17 +53,19 @@ const AuthScreen = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Login</Text>
       <TextInput
-      style={styles.input}
-      placeholder="Enter your email"
-      value={email}
-      onChangeText={(text) => {
-      setEmail(text);
-      handleValidEmail(text); // Call the validation function
-      }}
-      keyboardType="email-address"
-      autoCapitalize="none"
-        />
-{emailValidError ? <Text style={{ color: "red" }}>{emailValidError}</Text> : null}
+        style={styles.input}
+        placeholder="Enter your email"
+        value={email}
+        onChangeText={(text) => {
+          setEmail(text);
+          handleValidEmail(text);
+        }}
+        keyboardType="email-address"
+        autoCapitalize="none"
+      />
+      {emailValidError ? (
+        <Text style={{ color: "red" }}>{emailValidError}</Text>
+      ) : null}
 
       <Button title="Send PIN" onPress={sendPinToEmail} disabled={loading} />
       {loading && <ActivityIndicator size="large" color="#0000ff" />}

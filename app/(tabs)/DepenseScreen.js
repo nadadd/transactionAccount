@@ -1,6 +1,8 @@
-  import React, { useState, useEffect } from 'react';
-  import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-  import { Picker } from '@react-native-picker/picker';
+  import React, { useState } from 'react';
+  import { View, Text, TextInput, Button,  FlatList, Picker, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+  import * as ImagePicker from 'expo-image-picker';
+  import * as DocumentPicker from 'expo-document-picker';
+
   import { useRouter, useLocalSearchParams } from 'expo-router';
   import { collection, addDoc } from 'firebase/firestore';
   import { db } from '../../firebaseConfig';
@@ -11,8 +13,14 @@
     const [amount, setAmount] = useState('');
     const [date, setDate] = useState(new Date().toISOString());
     const [description, setDescription] = useState('');
-    const [selectedAccount, setSelectedAccount] = useState('BIAT');
-    const [newAccount, setNewAccount] = useState('');
+    const [imageAssets, setImageAssets] = useState([]);
+    const [fileAssets, setFileAssets] = useState([]);
+
+const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
+const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
+const [newAccount, setNewAccount] = useState("");
+const [addingNewAccount, setAddingNewAccount] = useState(false);
+
 
     const categories = {
       Pays: ['Tunisie', 'France', 'Autriche', 'Amérique'],
@@ -37,9 +45,12 @@
         alert('No more categories available');
       }
     };
-    useEffect(() => {
-      console.log("Company state updated:", company);
-    }, [company]);
+
+
+
+   
+
+
     
     const handleSave = async () => {
       console.log("Navigating with company:", company); 
@@ -80,7 +91,64 @@
         alert('Failed to save transaction');
       }
     };
+  
+ 
+    const handleAccountChange = (value) => {
+      if (value === "+ Add New Account") {
+        setAddingNewAccount(true);  // Show input field
+      } else {
+        setAddingNewAccount(false);
+        setSelectedAccount(value);
+      }
+    };
     
+    const addNewAccount = () => {
+      if (newAccount.trim() !== "") {
+        setAccounts([...accounts, newAccount]);  // Add new account
+        setSelectedAccount(newAccount);  // Select the new account
+        setNewAccount("");  // Clear input
+        setAddingNewAccount(false);  // Hide input field
+      }
+    };
+    
+
+
+
+  const handleAddImage = async () => {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaType.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+  
+      if (!result.canceled) {
+        setImageAssets((prevAssets) => [...prevAssets, result.assets[0].uri]);
+      }
+    };
+  
+  const handleAddFile = async () => {
+      let result = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
+        copyToCacheDirectory: false,
+      });
+  
+      if (result.type === 'success') {
+        setFileAssets((prevAssets) => [...prevAssets, result.uri]);
+      }
+    };
+    const renderImageAssets = ({ item }) => (
+      <View style={styles.assetItem}>
+        <Text style={styles.assetText}>Image: {item}</Text>
+      </View>
+    );
+  
+    const renderFileAssets = ({ item }) => (
+      <View style={styles.assetItem}>
+        <Text style={styles.assetText}>File: {item}</Text>
+      </View>
+    );
+
 
     return (
       <ScrollView contentContainerStyle={styles.container}>
@@ -137,32 +205,68 @@
           placeholderTextColor="#999"
         />
 
-        <View style={styles.dropdownContainer}>
-          <Picker
-            selectedValue={selectedAccount}
-            onValueChange={(itemValue) => setSelectedAccount(itemValue)}
-            style={styles.picker}
-          >
-            <Picker.Item label="BIAT" value="BIAT" />
-            <Picker.Item label="ATB" value="ATB" />
-            <Picker.Item label="Add New Account..." value="add" />
-          </Picker>
-        </View>
 
-        {selectedAccount === 'add' && (
-          <TextInput
-            style={styles.newAccountInput}
-            placeholder="Enter new account name"
-            value={newAccount}
-            onChangeText={setNewAccount}
-            placeholderTextColor="#999"
-          />
-        )}
 
+<View>
+  <Text>Account :</Text>
+    <Picker style={styles.accountContainer}
+      selectedValue={selectedAccount}
+      onValueChange={handleAccountChange}
+    >
+      {accounts.map((account, index) => (
+        <Picker.Item key={index} label={account} value={account} />
+      ))}
+      <Picker.Item label="+ Add New Account" value="+ Add New Account" />
+    </Picker>
+
+    {addingNewAccount && (
+      <View>
+        <TextInput
+          style={{ borderBottomWidth: 1, marginVertical: 10, padding: 5 }}
+          placeholder="Enter account name"
+          value={newAccount}
+          onChangeText={setNewAccount}
+        />
+        <Button title="Add" onPress={addNewAccount} />
+      </View>
+    )}
+  </View>
+
+        
+       
+
+ {/* Add Image and File Buttons */}
+ <View style={styles.assetButtonsContainer}>
+        <TouchableOpacity onPress={handleAddImage} style={styles.assetButton}>
+          <Text style={styles.assetButtonText}>📸 Add Image</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleAddFile} style={styles.assetButton}>
+          <Text style={styles.assetButtonText}>📁 Add File</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Image Carousel */}
+      <FlatList
+        data={imageAssets}
+        renderItem={renderImageAssets}
+        keyExtractor={(item, index) => `image-${index}`}
+        horizontal
+        style={styles.assetCarousel}
+      />
+
+      {/* File Carousel */}
+      <FlatList
+        data={fileAssets}
+        renderItem={renderFileAssets}
+        keyExtractor={(item, index) => `file-${index}`}
+        horizontal
+        style={styles.assetCarousel}
+      />
 
         <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
           <Text style={styles.saveButtonText}>Save</Text>
         </TouchableOpacity>
+
       </ScrollView>
     );
   };
@@ -173,6 +277,38 @@
       padding: 20,
       backgroundColor: '#f8f9fa',
     },
+    accountContainer: {
+      padding: 15,
+    },
+    assetButtonsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginBottom: 20,
+      marginTop: 40,
+    },
+    assetButton: {
+      padding: 15,
+      backgroundColor: '#007bff',
+      borderRadius: 5,
+    },
+    assetButtonText: {
+      color: '#fff',
+      fontSize: 16,
+    },
+    assetCarousel: {
+      marginVertical: 10,
+    },
+    assetItem: {
+      backgroundColor: '#f0f0f0',
+      borderRadius: 5,
+      padding: 10,
+      marginRight: 10,
+    },
+    assetText: {
+      fontSize: 14,
+      color: '#333',
+    },
+
     header: {
       marginBottom: 20,
       marginTop: 50,
@@ -254,7 +390,7 @@
       fontWeight: 'bold',
     },
     saveButton: {
-      backgroundColor: '#007bff',
+      backgroundColor: '#28a745',
       padding: 15,
       borderRadius: 5,
       alignItems: 'center',
