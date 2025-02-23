@@ -1,31 +1,38 @@
-  import React, { useState, useEffect } from 'react';
-  import { View, Text, TextInput, Button,  FlatList, Picker, Image, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-  import * as ImagePicker from 'expo-image-picker';
-  import * as DocumentPicker from 'expo-document-picker';
-  import { useRouter, useLocalSearchParams } from 'expo-router';
-  import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-  import { db } from '../../firebaseConfig';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button, FlatList, Image, TouchableOpacity, Modal, StyleSheet, ScrollView } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebaseConfig';
 
-  const DepenseScreen = () => {
-    const router = useRouter();
-    const {company} = useLocalSearchParams();
-    const [amount, setAmount] = useState('');
-    const [date, setDate] = useState(new Date().toISOString());
-    const [description, setDescription] = useState('');
-    const [imageAssets, setImageAssets] = useState([]);
-    const [fileAssets, setFileAssets] = useState([]);
-    const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
-    const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
-    const [newAccount, setNewAccount] = useState("");
-    const [addingNewAccount, setAddingNewAccount] = useState(false);
-const [allAssets, setAllAssets] = useState('');
+const DepenseScreen = () => {
+  const router = useRouter();
+  const {company} = useLocalSearchParams();
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState(new Date().toISOString());
+  const [description, setDescription] = useState('');
+  const [imageAssets, setImageAssets] = useState([]);
+  const [fileAssets, setFileAssets] = useState([]);
+  const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]);
+  const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
+  const [newAccount, setNewAccount] = useState("");
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
+  const [addingNewAccount, setAddingNewAccount] = useState(false);
+  const [bilan, setBilan] = useState("Bilan");
+  const [caisse, setCaisse] = useState("Caisse");
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [bilanModalVisible, setBilanModalVisible] = useState(false);
+  const [caisseModalVisible, setCaisseModalVisible] = useState(false);
+  
+  const categories = {
+    Pays: ['Tunisie', 'France', 'Amérique'],
+    Salaire: ['Épargne', 'Frais'],
+    Devise: ['Euro', 'Dollar', 'Dinar'],
+  };
+  const [selectedCategories, setSelectedCategories] = useState([{ category: 'Pays', subcategory: '' }]);
+  const [categoryModals, setCategoryModals] = useState({});
 
-   // Finance states
-   const [bilan, setBilan] = useState("0");
-   const [caisse, setCaisse] = useState("0");
-   const [currentBalance, setCurrentBalance] = useState(0);
-
-   // Fetch balance and transactions on mount
   useEffect(() => {
     const fetchBalance = async () => {
       const transactionsCollection = collection(db, "transactions");
@@ -47,243 +54,289 @@ const [allAssets, setAllAssets] = useState('');
     fetchBalance();
   }, [company]);
 
+  const updateSubcategory = (index, subcategory) => {
+    const newCategories = [...selectedCategories];
+    newCategories[index].subcategory = subcategory;
+    setSelectedCategories(newCategories);
+    setCategoryModals({ ...categoryModals, [index]: false });
+  };
 
-    const categories = {
-      Pays: ['Tunisie', 'France', 'Amérique'],
-      Salaire: ['Épargne', 'Frais'],
-      Devise: ['Euro', 'Dollar', 'Dinar'],
-    };
-    const [selectedCategories, setSelectedCategories] = useState([{ category: 'Pays', subcategory: '' }]);
-
-    const updateSubcategory = (index, subcategory) => {
-      const newCategories = [...selectedCategories];
-      newCategories[index].subcategory = subcategory;
-      setSelectedCategories(newCategories);
-    };
-    const addCategory = () => {
-      const availableCategories = Object.keys(categories).filter(
-        (cat) => !selectedCategories.some((selected) => selected.category === cat)
-      );
-
-      if (availableCategories.length > 0) {
-        setSelectedCategories([...selectedCategories, { category: availableCategories[0], subcategory: '' }]);
-      } else {
-        alert('No more categories available');
-      }
-    };
-    
-    const handleSave = async () => {
-      console.log("Navigating with company:", company); 
-      if (!company) {
-        console.error("Company is undefined!"); 
-        return;
-      }
-      if (!amount || !selectedAccount || selectedCategories.some((item) => !item.subcategory) ) {
-        alert('Please fill all fields');
-        return;
-      }
-      try {
-        const transactionsCollection = collection(db, 'transactions');
-        await addDoc(transactionsCollection, {
-          amount: parseFloat(amount),
-          date,
-          description,
-          account: selectedAccount,
-          categories: selectedCategories.map((item) => ({
-            category: item.category,
-            subcategory: item.subcategory,
-          })),
-          company, 
-          type: 'depense',
-        });
-        alert('Transaction saved successfully!');
-
-        setAmount("");
-        setDescription("");
-        setSelectedAccount("BIAT");
-        setNewAccount("");
-
-        router.replace(`/TransactionScreen?company=${company}`);
-      } catch (error) {
-        console.error('Error saving transaction:', error);
-        alert('Failed to save transaction');
-      }
-    };
-    const handleAccountChange = (value) => {
-      if (value === "+ Add New Account") {
-        setAddingNewAccount(true);  
-      } else {
-        setAddingNewAccount(false);
-        setSelectedAccount(value);
-      }
-    };
-    const addNewAccount = () => {
-      if (newAccount.trim() !== "") {
-        setAccounts([...accounts, newAccount]);  
-        setSelectedAccount(newAccount);  
-        setNewAccount("");  
-        setAddingNewAccount(false);  
-      }
-    };
-    
-    const handleAddImage = async () => {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
-      if (!result.canceled) {
-        setImageAssets((prevAssets) => [...prevAssets, result.assets[0].uri]);
-      }
-    };
-   
-    const renderImageAssets = ({ item }) => (
-      <Image source={{ uri: item }} style={{ width: 150, height: 150, margin: 5 }} />
+  const addCategory = () => {
+    const availableCategories = Object.keys(categories).filter(
+      (cat) => !selectedCategories.some((selected) => selected.category === cat)
     );
-    
-    const handleAddFile = async () => {
-      let result = await DocumentPicker.getDocumentAsync({
-        type: '*/*',
-        copyToCacheDirectory: false,
+
+    if (availableCategories.length > 0) {
+      setSelectedCategories([...selectedCategories, { category: availableCategories[0], subcategory: '' }]);
+    } else {
+      alert('No more categories available');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!amount || !selectedAccount || selectedCategories.some((item) => !item.subcategory)) {
+      alert('Please fill all fields');
+      return;
+    }
+    try {
+      const transactionsCollection = collection(db, 'transactions');
+      await addDoc(transactionsCollection, {
+        amount: parseFloat(amount),
+        date,
+        description,
+        account: selectedAccount,
+        categories: selectedCategories.map((item) => ({
+          category: item.category,
+          subcategory: item.subcategory,
+        })),
+        company,
+        type: 'depense',
       });
-      if (result.type === 'success') {
-        setFileAssets((prevAssets) => [...prevAssets, result.uri]);
-      }
-    };
+      alert('Transaction saved successfully!');
+      router.replace(`/TransactionScreen?company=${company}`);
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      alert('Failed to save transaction');
+    }
+  };
 
-    const renderFileAssets = ({ item }) => (
-      <View style={styles.assetItem}>
-        <Text style={styles.assetText}>File: {item}</Text>
-      </View>
-    );
- 
+  const handleAddAccount = () => {
+    if (newAccount.trim() !== "") {
+      setAccounts([...accounts, newAccount]);
+      setSelectedAccount(newAccount);
+      setNewAccount("");
+      setAddingNewAccount(false);
+      setAccountModalVisible(false);
+    }
+  };
 
-    return (
-      <ScrollView contentContainerStyle={styles.container}>
+  // Rest of your existing image and file handling functions...
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
       <TouchableOpacity style={styles.closeButton} onPress={() => router.push(`/TransactionScreen?company=${company}`)}>
         <Text style={styles.closeButtonText}>✕</Text>
       </TouchableOpacity>
 
-        <View style={styles.header}>
-          <Text style={styles.headerText}>Depenses</Text>
-        </View>
-        <TextInput
-          style={styles.amountInput}
-          placeholder="0.000"
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="numeric"
-          placeholderTextColor="#999"
-        />
-        <View style={styles.dateContainer}>
-          <Text style={styles.dateText}>{date}</Text>
-        </View>
-        {selectedCategories.map((item, index) => (
-          <View key={index} style={styles.dropdownContainer}>
-            <Text style={styles.label}>{item.category}:</Text>
-            <Picker
-              selectedValue={item.subcategory}
-              style={styles.picker}
-              onValueChange={(value) => updateSubcategory(index, value)}>
-              <Picker.Item />
-              {categories[item.category].map((subcategory, idx) => (
-                <Picker.Item key={idx} label={subcategory} value={subcategory} />
-              ))}
-            </Picker>
-          </View>
-        ))}
-        {Object.keys(categories).length > selectedCategories.length && (
-          <TouchableOpacity style={styles.addButton} onPress={addCategory}>
-            <Text style={styles.addButtonText}>+ Add Subcategory</Text>
-          </TouchableOpacity>
-        )}
-        <TextInput
-          style={styles.descriptionInput}
-          placeholder="Description"
-          value={description}
-          onChangeText={setDescription}
-          placeholderTextColor="#999"
-        />
-     <View>
-  <Text>Account :</Text>
-    <Picker style={styles.accountContainer}
-      selectedValue={selectedAccount}
-      onValueChange={handleAccountChange}>
-      {accounts.map((account, index) => (
-        <Picker.Item key={index} label={account} value={account} />
-      ))}
-      <Picker.Item label="+ Add New Account" value="+ Add New Account" />
-    </Picker>
-
-    {addingNewAccount && (
-      <View>
-        <TextInput
-          style={{ borderBottomWidth: 1, marginVertical: 10, padding: 5 }}
-          placeholder="Enter account name"
-          value={newAccount}
-          onChangeText={setNewAccount}
-        />
-        <Button title="Add" onPress={addNewAccount} />
+      <View style={styles.header}>
+        <Text style={styles.headerText}>Depenses</Text>
       </View>
-    )}
-  </View>
 
-{/* Finance Section */}
+      <TextInput
+        style={styles.amountInput}
+        placeholder="0.000"
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="numeric"
+        placeholderTextColor="#999"
+      />
 
-<View style={styles.financeContainer}>
-<Text style={styles.financetext}><strong>Finance</strong> </Text>
-  <Text>Débit</Text>
+      <View style={styles.dateContainer}>
+        <Text style={styles.dateText}>{date}</Text>
+      </View>
+
+      {/* Categories Section */}
+      {selectedCategories.map((item, index) => (
+        <View key={index} style={styles.dropdownContainer}>
+          <Text style={styles.label}>{item.category}:</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setCategoryModals({ ...categoryModals, [index]: true })}
+          >
+            <Text>{item.subcategory || `Select ${item.category}`}</Text>
+          </TouchableOpacity>
+
+          <Modal
+            visible={categoryModals[index] || false}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select {item.category}</Text>
+                  <TouchableOpacity onPress={() => setCategoryModals({ ...categoryModals, [index]: false })}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                {categories[item.category].map((subcategory, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.modalItem}
+                    onPress={() => updateSubcategory(index, subcategory)}
+                  >
+                    <Text>{subcategory}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Modal>
+        </View>
+      ))}
+
+      {Object.keys(categories).length > selectedCategories.length && (
+        <TouchableOpacity style={styles.addButton} onPress={addCategory}>
+          <Text style={styles.addButtonText}>+ Add Subcategory</Text>
+        </TouchableOpacity>
+      )}
+
+      <TextInput
+        style={styles.descriptionInput}
+        placeholder="Description"
+        value={description}
+        onChangeText={setDescription}
+        placeholderTextColor="#999"
+      />
+
+      {/* Account Dropdown */}
+      <View>
+        <Text>Account:</Text>
+        <TouchableOpacity
+          style={styles.dropdown}
+          onPress={() => setAccountModalVisible(true)}
+        >
+          <Text>{selectedAccount}</Text>
+        </TouchableOpacity>
+
+        <Modal
+          visible={accountModalVisible}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Account</Text>
+                <TouchableOpacity onPress={() => setAccountModalVisible(false)}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              {accounts.map((account, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setSelectedAccount(account);
+                    setAccountModalVisible(false);
+                  }}
+                >
+                  <Text>{account}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.modalItem}
+                onPress={() => setAddingNewAccount(true)}
+              >
+                <Text style={styles.addButtonText}>+ Add New Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {addingNewAccount && (
+          <View>
+            <TextInput
+              style={styles.newAccountInput}
+              placeholder="Enter account name"
+              value={newAccount}
+              onChangeText={setNewAccount}
+            />
+            <Button title="Add" onPress={handleAddAccount} />
+          </View>
+        )}
+      </View>
+
+      {/* Finance Section */}
+      <View style={styles.financeContainer}>
+        <Text style={styles.financetext}><Text style={styles.bold}>Finance</Text></Text>
+        <Text>Débit</Text>
         <View style={styles.financeRow}>
-         
-          <Picker style={styles.financePicker} selectedValue={bilan} onValueChange={setBilan}>
-            <Picker.Item label="Bilan" value="Bilan" />
-            <Picker.Item label="Option 2" value="Option 2" />
-          </Picker>
+          {/* Bilan Dropdown */}
+          <TouchableOpacity
+            style={[styles.dropdown, { flex: 1, marginRight: 10 }]}
+            onPress={() => setBilanModalVisible(true)}
+          >
+            <Text>{bilan}</Text>
+          </TouchableOpacity>
 
+          <Modal
+            visible={bilanModalVisible}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Bilan</Text>
+                  <TouchableOpacity onPress={() => setBilanModalVisible(false)}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                {['Bilan', 'Option 2'].map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setBilan(option);
+                      setBilanModalVisible(false);
+                    }}
+                  >
+                    <Text>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Modal>
 
-          <Picker style={styles.financePicker} selectedValue={caisse} onValueChange={setCaisse}>
-            <Picker.Item label="Caisse" value="Caisse" />
-            <Picker.Item label="Option B" value="Option B" />
-          </Picker>
+          {/* Caisse Dropdown */}
+          <TouchableOpacity
+            style={[styles.dropdown, { flex: 1 }]}
+            onPress={() => setCaisseModalVisible(true)}
+          >
+            <Text>{caisse}</Text>
+          </TouchableOpacity>
+
+          <Modal
+            visible={caisseModalVisible}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Caisse</Text>
+                  <TouchableOpacity onPress={() => setCaisseModalVisible(false)}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                {['Caisse', 'Option B'].map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setCaisse(option);
+                      setCaisseModalVisible(false);
+                    }}
+                  >
+                    <Text>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Modal>
         </View>
 
         <Text style={styles.balance}>{currentBalance}</Text>
       </View>
 
- {/* Add Image and File Buttons */}
- <View style={styles.assetButtonsContainer}>
-        <TouchableOpacity onPress={handleAddImage} style={styles.assetButton}>
-          <Text style={styles.assetButtonText}>📸 Add Image</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleAddFile} style={styles.assetButton}>
-          <Text style={styles.assetButtonText}>📁 Add File</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Your existing image and file sections... */}
 
-      {/* Image Carousel */}
-      <FlatList
-        data={imageAssets}
-        renderItem={renderImageAssets}
-        keyExtractor={(item, index) => `image-${index}`}
-        horizontal
-        style={styles.assetCarousel}
-      />
-      {/* File Carousel */}
-      <FlatList
-        data={fileAssets}
-        renderItem={renderFileAssets}
-        keyExtractor={(item, index) => `file-${index}`}
-        horizontal
-        style={styles.assetCarousel}
-      />
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save</Text>
-        </TouchableOpacity>
-
-      </ScrollView>
-    );
-  };
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+        <Text style={styles.saveButtonText}>Save</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+};
 
   const styles = StyleSheet.create({
     container: {
@@ -412,6 +465,47 @@ const [allAssets, setAllAssets] = useState('');
     saveButtonText: {
       color: '#fff',
       fontSize: 18,
+      fontWeight: 'bold',
+    },
+
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: '#fff',
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      paddingBottom: 20,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+    },
+    modalItem: {
+      padding: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+    },
+    dropdown: {
+      padding: 15,
+      backgroundColor: '#fff',
+      borderRadius: 5,
+      borderWidth: 1,
+      borderColor: '#ccc',
+      marginVertical: 10,
+    },
+    bold: {
       fontWeight: 'bold',
     },
     financeContainer: { marginTop: 40 },

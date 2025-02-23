@@ -1,5 +1,6 @@
-import React, {useState, useEffect} from "react";
-import { View, Text, TextInput, FlatList, Image, Button, Picker, TouchableOpacity, StyleSheet, ScrollView} from "react-native";
+// Apports.js
+import React, { useState, useEffect } from "react";
+import { View, Text, TextInput, FlatList, Image, TouchableOpacity, Modal, StyleSheet, ScrollView } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
@@ -14,16 +15,17 @@ const Apports = () => {
   const [description, setDescription] = useState("");
   const [imageAssets, setImageAssets] = useState([]);
   const [fileAssets, setFileAssets] = useState([]);
-  const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]); 
+  const [accounts, setAccounts] = useState(["ATB", "BNA", "UBCI"]);
   const [selectedAccount, setSelectedAccount] = useState(accounts[0]);
   const [newAccount, setNewAccount] = useState("");
+  const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [addingNewAccount, setAddingNewAccount] = useState(false);
-   // Finance states
-   const [bilan, setBilan] = useState("0");
-   const [caisse, setCaisse] = useState("0");
-   const [currentBalance, setCurrentBalance] = useState(0);
+  const [bilan, setBilan] = useState("Bilan");
+  const [caisse, setCaisse] = useState("Caisse");
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [bilanModalVisible, setBilanModalVisible] = useState(false);
+  const [caisseModalVisible, setCaisseModalVisible] = useState(false);
 
-   // Fetch balance and transactions on mount
   useEffect(() => {
     const fetchBalance = async () => {
       const transactionsCollection = collection(db, "transactions");
@@ -46,7 +48,7 @@ const Apports = () => {
   }, [company]);
 
   const handleSave = async () => {
-    if (!amount && !selectedAccount) {
+    if (!amount || !selectedAccount) {
       alert("Please fill all fields");
       return;
     }
@@ -59,37 +61,32 @@ const Apports = () => {
         account: selectedAccount,
         company,
         type: "apport",
-      }); 
+      });
       alert("Transaction saved successfully!");
 
       setAmount("");
       setDescription("");
-      setSelectedAccount("BIAT");
+      setSelectedAccount(accounts[0]);
       setNewAccount("");
-      setBilan("0");
-      setCaisse("0");
+      setBilan("Bilan");
+      setCaisse("Caisse");
       router.push(`/TransactionScreen?company=${company}`);
     } catch (error) {
       console.error("Error saving transaction:", error);
       alert("Failed to save transaction");
     }
   };
-  const handleAccountChange = (value) => {
-    if (value === "+ Add New Account") {
-      setAddingNewAccount(true); 
-    } else {
-      setAddingNewAccount(false);
-      setSelectedAccount(value);
-    }
-  };
-  const addNewAccount = () => {
+
+  const handleAddAccount = () => {
     if (newAccount.trim() !== "") {
-      setAccounts([...accounts, newAccount]);  
+      setAccounts([...accounts, newAccount]);
       setSelectedAccount(newAccount);
-      setNewAccount(""); 
-      setAddingNewAccount(false); 
+      setNewAccount("");
+      setAddingNewAccount(false);
+      setAccountModalVisible(false);
     }
   };
+
   const handleAddImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -111,21 +108,23 @@ const Apports = () => {
       setFileAssets((prevAssets) => [...prevAssets, result.uri]);
     }
   };
+
   const renderImageAssets = ({ item }) => (
     <Image source={{ uri: item }} style={{ width: 150, height: 150, margin: 5 }} />
   );
+
   const renderFileAssets = ({ item }) => (
     <View style={styles.assetItem}>
-      <Text style={styles.assetText}>File: {item}</Text>  
+      <Text style={styles.assetText}>File: {item}</Text>
     </View>
   );
 
- 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-       <TouchableOpacity style={styles.closeButton} onPress={() => router.push(`/TransactionScreen?company=${company}`)}>
+      <TouchableOpacity style={styles.closeButton} onPress={() => router.push(`/TransactionScreen?company=${company}`)}>
         <Text style={styles.closeButtonText}>✕</Text>
       </TouchableOpacity>
+
       <View style={styles.header}>
         <Text style={styles.headerText}>Apports</Text>
       </View>
@@ -138,9 +137,11 @@ const Apports = () => {
         keyboardType="numeric"
         placeholderTextColor="#999"
       />
+
       <View style={styles.dateContainer}>
         <Text style={styles.dateText}>{date}</Text>
       </View>
+
       <TextInput
         style={styles.descriptionInput}
         placeholder="Description"
@@ -148,56 +149,152 @@ const Apports = () => {
         onChangeText={setDescription}
         placeholderTextColor="#999"
       />
-<View>
-  <Text>Account :</Text>
-    <Picker style={styles.accountContainer}
-      selectedValue={selectedAccount}
-      onValueChange={handleAccountChange}
-    >
-      {accounts.map((account, index) => (
-        <Picker.Item key={index} label={account} value={account} />
-      ))}
-      <Picker.Item label="+ Add New Account" value="+ Add New Account" />
-    </Picker>
 
-    {addingNewAccount && (
+      {/* Account Dropdown */}
       <View>
-        <TextInput
-          style={{ borderBottomWidth: 1, marginVertical: 10, padding: 5 }}
-          placeholder="Enter account name"
-          value={newAccount}
-          onChangeText={setNewAccount}
-        />
-        <Button title="Add" onPress={addNewAccount} />
+        <Text>Account:</Text>
+        <TouchableOpacity
+          style={styles.dropdown}
+          onPress={() => setAccountModalVisible(true)}
+        >
+          <Text>{selectedAccount}</Text>
+        </TouchableOpacity>
+
+        <Modal
+          visible={accountModalVisible}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Account</Text>
+                <TouchableOpacity onPress={() => setAccountModalVisible(false)}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              {accounts.map((account, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.modalItem}
+                  onPress={() => {
+                    setSelectedAccount(account);
+                    setAccountModalVisible(false);
+                  }}
+                >
+                  <Text>{account}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={styles.modalItem}
+                onPress={() => setAddingNewAccount(true)}
+              >
+                <Text style={styles.addButtonText}>+ Add New Account</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {addingNewAccount && (
+          <View>
+            <TextInput
+              style={styles.newAccountInput}
+              placeholder="Enter account name"
+              value={newAccount}
+              onChangeText={setNewAccount}
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddAccount}>
+              <Text style={styles.addButtonText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
-    )}
-  </View>
 
-{/* Finance Section */}
-
-<View style={styles.financeContainer}>
-<Text style={styles.financetext}><strong>Finance</strong> </Text>
-  <Text>Débit</Text>
+      {/* Finance Section */}
+      <View style={styles.financeContainer}>
+        <Text style={styles.financetext}><Text style={styles.bold}>Finance</Text></Text>
+        <Text>Débit</Text>
         <View style={styles.financeRow}>
-         
-          <Picker style={styles.financePicker} selectedValue={bilan} onValueChange={setBilan}>
-            <Picker.Item label="Bilan" value="Bilan" />
-            <Picker.Item label="Option 2" value="Option 2" />
-          </Picker>
+          {/* Bilan Dropdown */}
+          <TouchableOpacity
+            style={[styles.dropdown, { flex: 1, marginRight: 10 }]}
+            onPress={() => setBilanModalVisible(true)}
+          >
+            <Text>{bilan}</Text>
+          </TouchableOpacity>
 
+          <Modal
+            visible={bilanModalVisible}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Bilan</Text>
+                  <TouchableOpacity onPress={() => setBilanModalVisible(false)}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                {['Bilan', 'Option 2'].map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setBilan(option);
+                      setBilanModalVisible(false);
+                    }}
+                  >
+                    <Text>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Modal>
 
-          <Picker style={styles.financePicker} selectedValue={caisse} onValueChange={setCaisse}>
-            <Picker.Item label="Caisse" value="Caisse" />
-            <Picker.Item label="Option B" value="Option B" />
-          </Picker>
+          {/* Caisse Dropdown */}
+          <TouchableOpacity
+            style={[styles.dropdown, { flex: 1 }]}
+            onPress={() => setCaisseModalVisible(true)}
+          >
+            <Text>{caisse}</Text>
+          </TouchableOpacity>
+
+          <Modal
+            visible={caisseModalVisible}
+            transparent={true}
+            animationType="slide"
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Select Caisse</Text>
+                  <TouchableOpacity onPress={() => setCaisseModalVisible(false)}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                {['Caisse', 'Option B'].map((option, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setCaisse(option);
+                      setCaisseModalVisible(false);
+                    }}
+                  >
+                    <Text>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </Modal>
         </View>
 
         <Text style={styles.balance}>{currentBalance}</Text>
       </View>
 
-
-{/* Add Image and File Buttons */}
-<View style={styles.assetButtonsContainer}>
+      {/* Asset Buttons */}
+      <View style={styles.assetButtonsContainer}>
         <TouchableOpacity onPress={handleAddImage} style={styles.assetButton}>
           <Text style={styles.assetButtonText}>📸 Add Image</Text>
         </TouchableOpacity>
@@ -205,14 +302,16 @@ const Apports = () => {
           <Text style={styles.assetButtonText}>📁 Add File</Text>
         </TouchableOpacity>
       </View>
+
       {/* Image Carousel */}
-      <Image
+      <FlatList
         data={imageAssets}
         renderItem={renderImageAssets}
         keyExtractor={(item, index) => `image-${index}`}
         horizontal
         style={styles.assetCarousel}
       />
+
       {/* File Carousel */}
       <FlatList
         data={fileAssets}
@@ -221,6 +320,7 @@ const Apports = () => {
         horizontal
         style={styles.assetCarousel}
       />
+
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
         <Text style={styles.saveButtonText}>Save</Text>
       </TouchableOpacity>
@@ -233,6 +333,46 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 20,
     backgroundColor: "#f8f9fa",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  dropdown: {
+    padding: 15,
+    backgroundColor: '#fff',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    marginVertical: 10,
+  },
+  bold: {
+    fontWeight: 'bold',
   },
   assetButtonsContainer: {
     flexDirection: 'row',
